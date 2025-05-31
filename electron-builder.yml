@@ -2,6 +2,7 @@ appId: com.electron.app
 productName: woaapp
 directories:
   buildResources: build
+  output: dist
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -13,6 +14,7 @@ asarUnpack:
   - resources/**
 win:
   executableName: woaapp
+  artifactName: ${name}-${version}.${ext}
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

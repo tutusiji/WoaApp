@@ -1,0 +1,14 @@
+# Close all processes manually
+taskkill /F /IM electron.exe /T
+taskkill /F /IM woaapp.exe /T
+taskkill /F /IM node.exe /T
+
+# Wait a moment
+timeout /t 5
+
+# Delete the dist folder directly
+rd /s /q "D:\CodeLab\WoaApp\dist"
+
+# Run the build without the clean step
+npm run build && electron-builder --win
+
