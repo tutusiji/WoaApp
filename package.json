@@ -13,7 +13,7 @@
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev --watch",
     "clean": "powershell -Command \"Remove-Item -Recurse -Force dist\"",
     "build": "electron-vite build",
     "postinstall": "electron-builder install-app-deps",
