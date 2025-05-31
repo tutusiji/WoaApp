@@ -36,10 +36,10 @@ export default defineConfig({
     plugins: [vue()],
     server: {
       port: 5174,
-      strictPort: true,
-      hmr: {
-        overlay: false
-      }
+      // strictPort: true,
+      // hmr: {
+      //   overlay: false
+      // }
     },
     define: {
       __VUE_OPTIONS_API__: true,

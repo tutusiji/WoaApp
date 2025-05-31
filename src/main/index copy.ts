@@ -102,10 +102,6 @@ if (!gotTheLock) {
 
     ipcMain.on('update-unread-count', (event, data) => {
       console.log('Received unread count from renderer:', data)
-
-      // 更新托盘图标（有未读消息时闪烁）
-      updateTrayIconByMsgCount(data.totalUnread || 0)
-
       if (data.totalUnread === 0) {
         bubbleWindow?.hide()
       }
@@ -130,7 +126,7 @@ if (!gotTheLock) {
               if (is.dev) {
                 mainWindow?.webContents.openDevTools({ mode: 'detach' })
               }
-            }, 2000) // 等待页面加载完成
+            }, 200) // 等待页面加载完成
 
             // setTimeout(() => {
             //   fetchAndCacheUserInfo()
@@ -318,7 +314,7 @@ async function createWindow(): Promise<void> {
 
   // 允许所有请求
   session.webRequest.onBeforeRequest((details, callback) => {
-    // console.log('Request to:', details.url)
+    console.log('Request to:', details.url)
     // 允许所有请求
     callback({})
   })
@@ -595,14 +591,13 @@ function createBubbleWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/bubblePreload.js'),
       nodeIntegration: true, // 启用 Node.js 集成
-      contextIsolation: false, // 禁用上下文隔离
-      enableRemoteModule: false, // 启用远程模块
+      contextIsolation: true, // 上下文隔离
+      offscreen: false, // 启用离屏渲染
       backgroundThrottling: false, // 禁用后台节流
       session: ses,
-      webSecurity: false, // 禁用安全策略
-      allowRunningInsecureContent: true, // 允许运行不安全内容
-      experimentalFeatures: true, // 启用实验性功能
-      plugins: true // 启用插件
+      // additionalArguments: ['--disable-gpu-vsync'], // 降低GPU压力
+      // devTools: true // 开启调试工具
+      webSecurity: false // 禁用安全策略
     },
     icon: path.join(__dirname, 'icon.ico') // 自定义图标
   })
@@ -630,15 +625,7 @@ function createBubbleWindow(): void {
         console.log('Bubble window loaded') // 添加日志
         // 设置更高层级确保气泡永远悬浮在最上层
         bubbleWindow?.setAlwaysOnTop(true, 'screen-saver')
-        // 重置位置到屏幕右下角
-        const { workAreaSize } = screen.getPrimaryDisplay()
-        bubbleWindow?.setPosition(
-          workAreaSize.width - bubbleWidth - 110,
-          workAreaSize.height - bubbleHeight - 50
-        )
-        bubbleWindow?.showInactive() // 临时启用用于测试
-
-        // 气泡窗口加载完成，等待真实消息
+        // bubbleWindow?.showInactive()
       })
       .catch((err) => {
         console.error('Failed to load bubble window:', err) // 添加错误日志
@@ -652,13 +639,7 @@ function createBubbleWindow(): void {
         console.log('Bubble window loaded') // 添加日志
         // 设置更高层级确保气泡永远悬浮在最上层
         bubbleWindow?.setAlwaysOnTop(true, 'screen-saver')
-        // 重置位置到屏幕右下角
-        const { workAreaSize } = screen.getPrimaryDisplay()
-        bubbleWindow?.setPosition(
-          workAreaSize.width - bubbleWidth - 110,
-          workAreaSize.height - bubbleHeight - 50
-        )
-        bubbleWindow?.showInactive() // 临时启用用于测试
+        // bubbleWindow?.showInactive()
       })
       .catch((err) => {
         console.error('Failed to load bubble window:', err) // 添加错误日志
@@ -682,8 +663,8 @@ function createBubbleWindow(): void {
   bubbleWindow.webContents.executeJavaScript(`
     document.body.style.webkitAppRegion = 'drag'
   `)
-  // 可选：调试打开开发者工具（仅在需要调试时启用）
-  // bubbleWindow.webContents.openDevTools({ mode: 'detach' })
+  // 可选：调试打开开发者工具
+  // bubbleWindow.webContents.openDevTools()
 
   // 禁用鼠标右键菜单
   bubbleWindow.webContents.on('context-menu', (event) => {
@@ -736,7 +717,7 @@ function createExtensionWindow(): void {
     skipTaskbar: true,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: false,
+      contextIsolation: true,
       preload: join(__dirname, '../preload/extensionPreload.js') // 创建一个 preload 脚本
     }
   })
@@ -812,25 +793,6 @@ function createTray(): void {
       label: '消息调试工具',
       click: (): void => {
         bubbleWindow?.webContents.openDevTools({ mode: 'detach' })
-      }
-    },
-    {
-      label: '手动提取消息',
-      click: (): void => {
-        console.log('Manual message extraction triggered from tray menu')
-
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.executeJavaScript(`
-            if (typeof scrollToTop === 'function' && typeof extractMessages === 'function') {
-              console.log('🔄 Manually triggering message extraction from tray...');
-              scrollToTop(extractMessages);
-            } else {
-              console.error('❌ Message extraction functions not available');
-            }
-          `).catch(err => {
-            console.error('Failed to trigger manual message extraction from tray:', err)
-          })
-        }
       }
     }
   ]
@@ -1318,9 +1280,215 @@ function injectScript(): void {
       let lastUnreadCount = 0; // 用于存储上一次的未读消息总数
       let lastPushedMessages = []; // 用于存储上一次推送的消息，避免重复推送
 
-      // WebSocket 相关代码已移除，专注于 DOM 节点监听
+      // WebSocket 消息解析函数
+      function parseWebSocketMessage(base64Data) {
+        try {
+          // 解码 base64
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
 
-      // Protobuf 解析器和 WebSocket 相关代码已移除，专注于 DOM 节点监听
+          console.log('WebSocket message bytes:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
+          // 尝试解析消息内容
+          const result = parseProtobufMessage(bytes);
+          console.log('Parsed WebSocket message:', result);
+          return result;
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+          return null;
+        }
+      }
+
+      // 简单的 Protobuf 解析器（针对聊天消息）
+      function parseProtobufMessage(bytes) {
+        let offset = 0;
+        const result = {};
+
+        while (offset < bytes.length) {
+          // 读取 varint 标签
+          const tag = readVarint(bytes, offset);
+          if (!tag) break;
+
+          offset = tag.offset;
+          const fieldNumber = tag.value >> 3;
+          const wireType = tag.value & 0x07;
+
+          console.log(\`Field \${fieldNumber}, Wire Type \${wireType}\`);
+
+          switch (wireType) {
+            case 0: // Varint
+              const varint = readVarint(bytes, offset);
+              if (varint) {
+                result[\`field_\${fieldNumber}\`] = varint.value;
+                offset = varint.offset;
+              }
+              break;
+
+            case 2: // Length-delimited
+              const length = readVarint(bytes, offset);
+              if (length && offset + length.value <= bytes.length) {
+                offset = length.offset;
+                const data = bytes.slice(offset, offset + length.value);
+
+                // 尝试解析为字符串
+                try {
+                  const str = new TextDecoder('utf-8').decode(data);
+                  if (isPrintableString(str)) {
+                    result[\`field_\${fieldNumber}_str\`] = str;
+                    console.log(\`Field \${fieldNumber} (string): \${str}\`);
+                  }
+                } catch (e) {}
+
+                // 保存原始数据
+                result[\`field_\${fieldNumber}_bytes\`] = Array.from(data);
+                offset += length.value;
+              }
+              break;
+
+            default:
+              console.log(\`Unsupported wire type: \${wireType}\`);
+              offset++;
+              break;
+          }
+        }
+
+        return result;
+      }
+
+      // 读取 varint
+      function readVarint(bytes, offset) {
+        let value = 0;
+        let shift = 0;
+        let currentOffset = offset;
+
+        while (currentOffset < bytes.length) {
+          const byte = bytes[currentOffset];
+          value |= (byte & 0x7F) << shift;
+          currentOffset++;
+
+          if ((byte & 0x80) === 0) {
+            return { value, offset: currentOffset };
+          }
+
+          shift += 7;
+          if (shift >= 64) break;
+        }
+
+        return null;
+      }
+
+      // 检查字符串是否可打印
+      function isPrintableString(str) {
+        return str.length > 0 && /^[\\x20-\\x7E\\u4e00-\\u9fff]*$/.test(str);
+      }
+
+      // 监听 WebSocket 消息
+      function interceptWebSocket() {
+        const originalWebSocket = window.WebSocket;
+
+        window.WebSocket = function(url, protocols) {
+          console.log('WebSocket connection to:', url);
+          const ws = new originalWebSocket(url, protocols);
+
+          // 监听消息
+          const originalOnMessage = ws.onmessage;
+          ws.onmessage = function(event) {
+            console.log('WebSocket message received:', event);
+
+            if (event.data instanceof ArrayBuffer) {
+              const bytes = new Uint8Array(event.data);
+              console.log('WebSocket binary message:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
+              // 尝试解析消息
+              const parsed = parseProtobufMessage(bytes);
+              if (parsed) {
+                console.log('Parsed WebSocket message:', parsed);
+
+                // 提取消息内容和发送者信息
+                const messageData = extractMessageFromParsed(parsed);
+                if (messageData) {
+                  console.log('Extracted message data:', messageData);
+
+                  // 发送到主进程
+                  if (window.electron && window.electron.ipcRenderer) {
+                    window.electron.ipcRenderer.send('websocket-message-received', messageData);
+                  }
+                }
+              }
+            } else if (typeof event.data === 'string') {
+              console.log('WebSocket text message:', event.data);
+            }
+
+            // 调用原始处理函数
+            if (originalOnMessage) {
+              originalOnMessage.call(this, event);
+            }
+          };
+
+          return ws;
+        };
+
+        // 保持原型链
+        window.WebSocket.prototype = originalWebSocket.prototype;
+      }
+
+      // 从解析的 protobuf 数据中提取消息信息
+      function extractMessageFromParsed(parsed) {
+        const messageData = {
+          content: '',
+          username: '',
+          senderId: '',
+          timestamp: Date.now(),
+          avatar: '',
+          unreadCount: 1
+        };
+
+        // 查找消息内容和发送者信息
+        Object.keys(parsed).forEach(key => {
+          const value = parsed[key];
+
+          if (key.includes('_str') && value) {
+            // 检查是否是消息内容（通常是较长的字符串）
+            if (value.length > 5 && !value.includes('{') && !value.includes('kim-text')) {
+              messageData.content = value;
+              console.log('Found message content:', value);
+            }
+
+            // 检查是否是用户ID或发送者信息
+            if (value.includes('100021908') || value.match(/^\\d{10,}$/)) {
+              messageData.senderId = value;
+              console.log('Found sender ID:', value);
+            }
+
+            // 检查是否是JSON格式的扩展信息
+            if (value.includes('sender_profile') || value.includes('utime')) {
+              try {
+                const jsonData = JSON.parse(value);
+                if (jsonData.sender_profile && jsonData.sender_profile.utime) {
+                  messageData.timestamp = jsonData.sender_profile.utime * 1000;
+                }
+              } catch (e) {
+                // 忽略JSON解析错误
+              }
+            }
+          }
+        });
+
+        // 如果没有找到消息内容，返回null
+        if (!messageData.content) {
+          return null;
+        }
+
+        // 设置默认用户名（如果没有找到发送者信息）
+        if (!messageData.username) {
+          messageData.username = messageData.senderId ? \`用户\${messageData.senderId.slice(-4)}\` : '未知用户';
+        }
+
+        return messageData;
+      }
 
       // 滚动列表到顶部，确保虚拟列表加载完整
       function scrollToTop(callback) {
@@ -1387,166 +1555,140 @@ function injectScript(): void {
               } else if (canvasEl && typeof canvasEl.toDataURL === 'function') {
                 avatar = getClearAvatar(canvasEl, 38)
               }
-              const messageData = {
-                username: item.querySelector('.chat-name-text')?.textContent?.trim() || '',
-                content: item.querySelector('.message-detail .chat-message .content')?.textContent?.trim() || '',
-                avatar: avatar,
-                unreadCount: parseInt(unreadText, 10) || 1,
-                timestamp: Date.now(),
-                senderId: item.querySelector('.chat-name-text')?.textContent?.trim() || 'unknown'
-              };
-
-              results.push(messageData);
+              results.push({
+                unread: unreadEl.textContent,
+                avatar,
+                username: item.querySelector('.chat-name-text')?.textContent || '',
+                time: item.querySelector('.chat-time')?.textContent || '',
+                content: item.querySelector('.message-detail .chat-message .content')?.textContent || ''
+              });
             }
           });
 
           // 对 results 去重（以 username+content 为唯一标识）
           const seen = new Set();
           results = results.filter(msg => {
-            const key = msg.username + '|' + msg.content + '|' + msg.timestamp;
+            const key = msg.username + '|' + msg.content + '|' + msg.time;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
           });
 
-          console.log('📧 Extracted messages:', results);
-          console.log('📊 Total messages found:', results.length);
 
           // 检查是否与上次推送的数据相同，避免重复推送
-          const resultsString = JSON.stringify(results.map(r => ({ username: r.username, content: r.content })));
-          const lastPushedString = JSON.stringify(lastPushedMessages.map(r => ({ username: r.username, content: r.content })));
-
+          const resultsString = JSON.stringify(results);
+          const lastPushedString = JSON.stringify(lastPushedMessages);
           if (resultsString !== lastPushedString) {
-            console.log('🚀 New messages detected, pushing to main process...');
-            lastPushedMessages = [...results]; // 更新上次推送的数据
+            lastPushedMessages = results; // 更新上次推送的数据
             window.electronAPI && window.electronAPI.send('update-messages', results);
           } else {
-            console.log('⏸️ No changes in messages, skipping push.');
+            console.log('No changes in messages, skipping push.');
           }
         }, SCROLL_TIMEOUT);
       }
 
-      // 计算所有聊天项的未读消息数量，并推送给主进程
+      // 计算 .unread-count 内的数字，并推送给主进程
       function calculateUnreadCount() {
+        const unreadNode = document.querySelector('.unread-count');
         let totalUnread = 0;
 
-        // 查找所有聊天列表项的红点
-        const chatItems = document.querySelectorAll('.chat-item, .conversation-item, [class*="chat"], [class*="conversation"]');
-
-        chatItems.forEach(item => {
-          // 查找红点元素，可能的类名包括：
-          const redDotSelectors = [
-            '.unread-count',
-            '.badge',
-            '.red-dot',
-            '.notification-badge',
-            '[class*="unread"]',
-            '[class*="badge"]',
-            '[class*="count"]'
-          ];
-
-          for (const selector of redDotSelectors) {
-            const redDot = item.querySelector(selector);
-            if (redDot && redDot.textContent) {
-              const count = parseInt(redDot.textContent.trim(), 10);
-              if (!isNaN(count) && count > 0) {
-                totalUnread += count;
-                console.log(\`Found unread count: \${count} in \${selector}\`);
-                break; // 找到一个就跳出循环
-              }
-            }
-          }
-
-          // 如果没有找到数字红点，检查是否有红点样式（表示有未读但不显示数量）
-          if (totalUnread === 0) {
-            const visualRedDots = item.querySelectorAll('[style*="background"], [class*="dot"], [class*="indicator"]');
-            visualRedDots.forEach(dot => {
-              const style = window.getComputedStyle(dot);
-              if (style.backgroundColor.includes('red') ||
-                  style.backgroundColor.includes('rgb(255') ||
-                  style.backgroundColor.includes('#f') ||
-                  dot.className.includes('red') ||
-                  dot.className.includes('unread')) {
-                totalUnread += 1; // 有红点但没有数字，算作1条未读
-                console.log('Found visual red dot indicator');
-              }
-            });
-          }
-        });
-
-        console.log(\`Total unread count calculated: \${totalUnread}\`);
+        if (unreadNode) {
+          const count = parseInt(unreadNode.textContent || '0', 10);
+          totalUnread = isNaN(count) ? 0 : count;
+        } else {
+          // 如果 .unread-count 不存在，表示没有新消息
+          totalUnread = 0;
+        }
 
         // 推送未读消息总数到主进程
         window.electronAPI && window.electronAPI.send('update-unread-count', { totalUnread });
         return totalUnread;
       }
 
-      // 监听聊天列表的变化
-      function observeChatList() {
-        // 查找聊天列表容器
-        const chatListSelectors = [
-          '.vue-recycle-scroller__item-wrapper'
-        ];
-
-        let chatListContainer = null;
-        for (const selector of chatListSelectors) {
-          chatListContainer = document.querySelector(selector);
-          if (chatListContainer) {
-            console.log(\`Found chat list container: \${selector}\`);
-            break;
-          }
+      // 监听 .unread-count 的存在与数字变化
+      function observeUnreadCount() {
+        const unreadNode = document.querySelector('.unread-count');
+        if (!unreadNode) {
+          console.log('.unread-count node not found, setting unread count to 0.');
+          window.electronAPI && window.electronAPI.send('update-unread-count', { totalUnread: 0 });
+          window.electronAPI && window.electronAPI.send('update-messages', []); // 推送空数组
+          return;
         }
 
-        if (!chatListContainer) {
-          // 如果找不到特定容器，监听整个 body
-          chatListContainer = document.body;
-          console.log('Chat list container not found, monitoring entire body');
-        }
-
-        // 监听聊天列表变化
+        // 监听数字变化
         const observer = new MutationObserver(() => {
-          calculateUnreadCount();
+          const totalUnread = calculateUnreadCount();
+          if (totalUnread !== lastUnreadCount) {
+            lastUnreadCount = totalUnread; // 更新未读消息总数
+            if (totalUnread > 0) {
+              console.log('Unread count changed, scrolling to top and extracting messages.');
+              scrollToTop(extractMessages); // 滚动到顶部后再提取消息
+            } else {
+              console.log('No unread messages, sending empty data.');
+              window.electronAPI && window.electronAPI.send('update-messages', []); // 推送空数组
+            }
+          }
         });
-
-        observer.observe(chatListContainer, {
-          childList: true,
-          characterData: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['class', 'style'] // 监听样式变化，因为红点可能通过样式显示
-        });
-        console.log('MutationObserver attached to chat list container');
+        observer.observe(unreadNode, { childList: true, characterData: true, subtree: true });
+        console.log('MutationObserver attached to .unread-count');
       }
 
-      // 动态检测聊天列表并绑定监听
-      function monitorChatList() {
-        // 首次检查并绑定监听
-        observeChatList();
+      // 动态检测 .unread-count 的存在与重新绑定监听
+      function monitorUnreadCount() {
+        const parent = document.body; // 或更精确的父节点
+        const observer = new MutationObserver(() => {
+          const unreadNode = document.querySelector('.unread-count');
+          if (unreadNode) {
+            console.log('.unread-count node detected, attaching observer.');
+            observeUnreadCount(); // 重新绑定监听
+            const initialCount = calculateUnreadCount();
+            if (initialCount > 0 && initialCount !== lastUnreadCount) {
+              console.log('Initial unread count detected, scrolling to top and extracting messages.');
+              lastUnreadCount = initialCount; // 更新未读消息总数
+              scrollToTop(extractMessages); // 滚动到顶部后再提取消息
+            }
+          } else {
+            // 如果 .unread-count 被移除，推送空数组和 0
+            console.log('.unread-count node removed, sending empty data.');
+            lastUnreadCount = 0; // 重置未读消息总数
+            window.electronAPI && window.electronAPI.send('update-unread-count', { totalUnread: 0 });
+            window.electronAPI && window.electronAPI.send('update-messages', []); // 推送空数组
+          }
+        });
+        observer.observe(parent, { childList: true, subtree: true });
+        console.log('Monitoring for .unread-count node changes.');
+      }
 
-        // 计算初始未读数量
-        const initialCount = calculateUnreadCount();
-        if (initialCount > 0 && initialCount !== lastUnreadCount) {
-          console.log('Initial unread count detected, scrolling to top and extracting messages.');
-          lastUnreadCount = initialCount; // 更新未读消息总数
-          scrollToTop(extractMessages); // 滚动到顶部后再提取消息
+      // 测试解析您提供的 base64 数据
+      function testParseMessage() {
+        const testData = 'AAABFgApAAQAAAGQGESqPIxQcC8tc21ncy1jbGllbnQtaWQtEAIY7QEK6gEIpd2CDBIIa2ltLXRleHQaIDUwNDczMjIxY2M2YjQxNWNhNGI2OWU3OGFhMDI2ZjY1IKnJraEFKPuwyuzHx6qiGDC5nAE4jN7jufIyQgwxMDAwMjE5MDgzMzliV3siZXh0Ijp7fSwic2VuZGVyX3Byb2ZpbGUiOnsidXRpbWUiOjE3MjY0NjUyNjR9LCJ2aXNpYmlsaXR5IjowLCJ0ZXh0X3R5cGUiOiJwbGFpblRleHQifWooCiYyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMsIBANIBBAgCEAKKAgA=';
+        console.log('Testing parse of provided message...');
+        const result = parseWebSocketMessage(testData);
+        if (result) {
+          console.log('Test parse result:', result);
+
+          // 查找消息内容和发送者信息
+          Object.keys(result).forEach(key => {
+            if (key.includes('_str') && result[key]) {
+              console.log(\`Found in test data - \${key}: \${result[key]}\`);
+            }
+          });
         }
-
-        // 定期重新检查聊天列表（防止页面动态加载导致监听失效）
-        setInterval(() => {
-          console.log('Periodic check for chat list changes...');
-          calculateUnreadCount(); // 重新计算未读数量
-        }, 5000); // 每5秒检查一次
       }
-
-      // WebSocket 测试函数已移除，专注于 DOM 节点监听
 
       // 初始化所有功能
       function initializeScript() {
         console.log('Chat message monitor script initialized.');
 
-        // 首次执行：等待页面完全渲染后开始监听聊天列表
+        // 启动 WebSocket 拦截
+        interceptWebSocket();
+
+        // 测试解析提供的消息
+        testParseMessage();
+
+        // 首次执行：等待页面完全渲染后开始监听
         setTimeout(() => {
-          monitorChatList();
+          monitorUnreadCount();
         }, INITIAL_DELAY);
       }
 
@@ -1559,7 +1701,7 @@ function injectScript(): void {
 
         const button = document.createElement('button');
         button.id = 'test-bubble-btn';
-        button.innerHTML = '🔔 提取消息到气泡';
+        button.innerHTML = '🔔 测试气泡窗口';
         button.style.cssText = \`
           position: fixed;
           top: 20px;
@@ -1588,9 +1730,13 @@ function injectScript(): void {
         });
 
         button.addEventListener('click', () => {
-          console.log('Triggering real message extraction...');
-          // 直接触发真实消息提取
-          scrollToTop(extractMessages);
+          console.log('Testing bubble window...');
+          // 通过 window.api 调用测试函数
+          if (window.api && window.api.testShowBubble) {
+            window.api.testShowBubble();
+          } else {
+            console.error('window.api.testShowBubble not available');
+          }
         });
 
         document.body.appendChild(button);
@@ -1600,7 +1746,7 @@ function injectScript(): void {
       // 启动所有功能
       initializeScript();
 
-      // 创建消息提取按钮
+      // 创建测试按钮
       setTimeout(() => {
         createTestBubbleButton();
       }, 1000);
@@ -1619,25 +1765,15 @@ ipcMain.on('get-current-mode', (event) => {
   event.sender.send('update-notification-mode', currentMode)
 })
 
-// 气泡窗口准备就绪时的处理
+// 修改现有 bubble-ready 处理，确保同时发送最新模式
 ipcMain.on('bubble-ready', (event) => {
-  console.log('Bubble window is ready, triggering message extraction...')
-
-  // 发送当前通知模式
-  const currentMode = store.get('notificationMode')
-  if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+  if (bubbleWindow && lastMessages.length > 0) {
+    bubbleWindow?.webContents.send('update-message', lastMessages)
+    // bubbleWindow?.showInactive() // 新消息提醒不抢焦点
+    // 确保也发送当前通知模式
+    const currentMode = store.get('notificationMode')
     bubbleWindow.webContents.send('update-notification-mode', currentMode)
-  }
-
-  // 主动触发消息提取，确保获取最新的真实消息
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.executeJavaScript(`
-      if (typeof scrollToTop === 'function' && typeof extractMessages === 'function') {
-        scrollToTop(extractMessages);
-      }
-    `).catch(err => {
-      console.error('Failed to trigger message extraction:', err)
-    })
+    bubbleShowMode()
   }
 })
 
@@ -1692,9 +1828,62 @@ function updateBubbleContent(
   window.setBounds({ x: curX, y: newY, width, height: newHeight })
 }
 
-// WebSocket 监听已移除，改用页面节点监听
+// 监听 WebSocket 消息
+ipcMain.on('websocket-message-received', (event, messageData) => {
+  console.log('WebSocket message received in main process:', messageData)
 
+  // 将 WebSocket 消息添加到消息列表
+  if (messageData && messageData.content) {
+    // 检查是否已存在相同的消息（避免重复）
+    const existingMessage = lastMessages.find(
+      (msg) => msg.content === messageData.content && msg.timestamp === messageData.timestamp
+    )
 
+    if (!existingMessage) {
+      // 添加新消息到列表开头
+      lastMessages.unshift({
+        username: messageData.username || '未知用户',
+        content: messageData.content,
+        avatar: messageData.avatar || '',
+        unreadCount: messageData.unreadCount || 1,
+        timestamp: messageData.timestamp || Date.now(),
+        senderId: messageData.senderId || ''
+      })
+
+      // 限制消息列表长度
+      if (lastMessages.length > 10) {
+        lastMessages = lastMessages.slice(0, 10)
+      }
+
+      console.log('Updated message list:', lastMessages)
+
+      // 更新气泡窗口
+      if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+        bubbleWindow.webContents.send('update-message', lastMessages)
+
+        // 根据通知模式显示气泡
+        const mode = store.get('notificationMode')
+        if (mode === 'active' || mode === 'active-3s') {
+          bubbleShowMode()
+        }
+      }
+    }
+  }
+})
+
+// 气泡窗口 IPC 监听器
+ipcMain.on('bubble-ready', () => {
+  console.log('Bubble window is ready')
+
+  // 发送当前消息列表到气泡窗口
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+    bubbleWindow.webContents.send('update-message', lastMessages)
+
+    // 发送当前通知模式
+    const mode = store.get('notificationMode')
+    bubbleWindow.webContents.send('update-notification-mode', mode)
+  }
+})
 
 ipcMain.on('bubble-mouse-enter', () => {
   console.log('Mouse entered bubble window')
@@ -1767,25 +1956,39 @@ ipcMain.on('open-bubble-devtools', () => {
   }
 })
 
-// 手动触发消息提取
-ipcMain.on('manual-extract-messages', () => {
-  console.log('Manual message extraction triggered')
+// 测试显示气泡窗口
+ipcMain.on('test-show-bubble', () => {
+  console.log('Testing bubble window display...')
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.executeJavaScript(`
-      if (typeof scrollToTop === 'function' && typeof extractMessages === 'function') {
-        console.log('🔄 Manually triggering message extraction...');
-        scrollToTop(extractMessages);
-      } else {
-        console.error('❌ Message extraction functions not available');
-      }
-    `).catch(err => {
-      console.error('Failed to trigger manual message extraction:', err)
-    })
+  // 添加一些测试消息
+  const testMessages = [
+    {
+      username: '测试用户1',
+      content: '这是一条测试消息，用来验证气泡窗口显示功能',
+      avatar: '',
+      unreadCount: 1,
+      timestamp: Date.now(),
+      senderId: '123456'
+    },
+    {
+      username: '测试用户2',
+      content: '这是第二条测试消息，内容稍微长一些，用来测试消息显示效果和换行处理',
+      avatar: '',
+      unreadCount: 2,
+      timestamp: Date.now() - 60000,
+      senderId: '789012'
+    }
+  ]
+
+  // 更新消息列表
+  lastMessages = testMessages
+
+  // 显示气泡窗口
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+    bubbleWindow.webContents.send('update-message', lastMessages)
+    showBubbleWindow()
   }
 })
-
-
 
 // 主进程监听并转发到气泡窗口
 ipcMain.on('update-messages', async (event, data) => {
@@ -1873,24 +2076,8 @@ function showBubbleWindow(): void {
   } else {
     bubbleWindow?.reload()
     const pos = store.get('bubbleWindowPosition')
-    const { workAreaSize } = screen.getPrimaryDisplay()
-
-    // 检查存储的位置是否在屏幕范围内
-    if (
-      pos &&
-      pos.x >= 0 &&
-      pos.y >= 0 &&
-      pos.x + bubbleWidth <= workAreaSize.width &&
-      pos.y + bubbleHeight <= workAreaSize.height
-    ) {
+    if (pos) {
       bubbleWindow.setPosition(pos.x, pos.y)
-    } else {
-      // 如果位置无效，重置到屏幕右下角
-      const newX = workAreaSize.width - bubbleWidth - 110
-      const newY = workAreaSize.height - bubbleHeight - 50
-      bubbleWindow.setPosition(newX, newY)
-      // 更新存储的位置
-      store.set('bubbleWindowPosition', { x: newX, y: newY })
     }
     bubbleWindow?.on('ready-to-show', () => {
       console.log('bubbleWindow reloaded and ready to show================reload', lastMessages)
