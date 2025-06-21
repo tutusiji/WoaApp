@@ -11,10 +11,12 @@ let isCapturing = false
  */
 export function initScreenshot(mainWindow: BrowserWindow) {
   screenshotsInstance = new screenshots()
-
+  isCapturing = false // 保证每次初始化时状态重置
   // 注册截图快捷键
   globalShortcut.register('Alt+Shift+A', () => {
-    startScreenshot()
+    if (!isCapturing) {
+      startScreenshot()
+    }
   })
 
   // 监听截图完成事件
@@ -42,27 +44,29 @@ export function initScreenshot(mainWindow: BrowserWindow) {
       return
     }
     isSaving = true
-    dialog
-      .showSaveDialog({
-        defaultPath: `screenshot-${Date.now()}.png`,
-        filters: [
-          { name: 'PNG Images', extensions: ['png'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
-      })
-      .then((result) => {
-        if (!result.canceled && result.filePath) {
-          fs.writeFileSync(result.filePath, buffer)
-          clipboard.writeImage(nativeImage.createFromBuffer(buffer))
-          console.log('截图已保存并复制到剪贴板', result.filePath)
-        }
-      })
-      .finally(() => {
-        screenshotsInstance.endCapture()
-        isSaving = false
-        isCapturing = false
-        globalShortcut.unregister('Escape')
-      })
+    isCapturing = false
+    screenshotsInstance.endCapture() // 先结束截图遮罩
+    setTimeout(() => {
+      dialog
+        .showSaveDialog({
+          defaultPath: `screenshot-${Date.now()}.png`,
+          filters: [
+            { name: 'PNG Images', extensions: ['png'] },
+            { name: 'All Files', extensions: ['*'] }
+          ]
+        })
+        .then((result) => {
+          if (!result.canceled && result.filePath) {
+            fs.writeFileSync(result.filePath, buffer)
+            clipboard.writeImage(nativeImage.createFromBuffer(buffer))
+            console.log('截图已保存并复制到剪贴板', result.filePath)
+          }
+        })
+        .finally(() => {
+          setTimeout(() => { isSaving = false }, 300)
+          globalShortcut.unregister('Escape')
+        })
+    }, 0)
   })
 
   // 注入截图按钮
