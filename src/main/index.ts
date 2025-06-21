@@ -21,6 +21,7 @@ import icon from '../../resources/icon1.png?asset'
 import { reportUserBehavior } from './report'
 import packageJson from '../../package.json'
 import { fetchAndCacheUserInfo } from './getDepartMent'
+import { initScreenshot, cleanupScreenshot } from './screenshot'
 
 let mainWindow: BrowserWindow | undefined | null
 let bubbleWindow: BrowserWindow | null = null
@@ -71,6 +72,10 @@ if (!gotTheLock) {
   app.quit()
   process.exit(0)
 } else {
+  app.on('will-quit', () => {
+    cleanupScreenshot()
+  })
+
   app.on('second-instance', (event, argv, workingDirectory) => {
     // 已有实例时，尝试让主窗口显示并置顶
     if (mainWindow) {
@@ -99,6 +104,14 @@ if (!gotTheLock) {
 
     // IPC test
     ipcMain.on('ping', () => console.log('pong'))
+
+
+
+    // 初始化截图功能,传入主窗口实例
+    // 确保 mainWindow 存在时才初始化截图功能
+    if (mainWindow) {
+      initScreenshot(mainWindow)
+    }
 
     ipcMain.on('update-unread-count', (event, data) => {
       console.log('Received unread count from renderer:', data)
