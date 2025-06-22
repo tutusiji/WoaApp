@@ -1,5 +1,9 @@
 import { BrowserWindow, ipcMain, globalShortcut, clipboard, dialog, nativeImage } from 'electron'
 import screenshots from 'electron-screenshots'
+// src\utils\screenshot\lib\index.cjs.js
+// const screenshots = require('../../src/utils/screenshot/lib/index.cjs.js'); // ES module version for production
+// import screenshots from '../utils/screenshot/lib/index.js'
+
 import fs from 'fs'
 
 let screenshotsInstance: any = null

@@ -32,3 +32,6 @@ $ npm run build:mac
 # For Linux
 $ npm run build:linux
 ```
+
+首先安装私有库
+npm install react-screenshots@0.5.23 electron-screenshots@0.5.28 --registry http://localhost:4873/
