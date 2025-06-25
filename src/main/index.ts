@@ -9,8 +9,7 @@ import {
   screen,
   session,
   dialog,
-  clipboard,
-  Notification
+  clipboard
 } from 'electron'
 const Store = require('electron-store')
 import { join } from 'path'
@@ -22,17 +21,19 @@ import { reportUserBehavior } from './report'
 import packageJson from '../../package.json'
 import { fetchAndCacheUserInfo } from './getDepartMent'
 import { initScreenshot, cleanupScreenshot } from './screenshot'
+import { TodoManager } from './todo'
 
 let mainWindow: BrowserWindow | undefined | null
 let bubbleWindow: BrowserWindow | null = null
-let extensionWindow: BrowserWindow | null = null
-let reqId: string | null = null
+// let extensionWindow: BrowserWindow | null = null // Commented out as it's unused
+// let reqId: string | null = null // Commented out as it's unused
 let tray: Tray | null = null
 let isQuitting = false
-const currentUserId: string | null = null
+// const currentUserId: string | null = null // Commented out as it's unused
 let lastMessages: any[] = []
 let ses
 const store = new (Store as any).default() ? new (Store as any).default() : new (Store as any)()
+let todoManager: TodoManager | null = null
 // 1. 初始化 notificationMode，若无则写入默认值
 // let notificationMode = store.get('notificationMode', 'active')
 if (!store.has('notificationMode')) {
@@ -76,7 +77,7 @@ if (!gotTheLock) {
     cleanupScreenshot()
   })
 
-  app.on('second-instance', (event, argv, workingDirectory) => {
+  app.on('second-instance', (_event, _argv, _workingDirectory) => {
     // 已有实例时，尝试让主窗口显示并置顶
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
@@ -94,6 +95,9 @@ if (!gotTheLock) {
     await createWindow() // 创建主窗口（异步）
     createTray() // 创建托盘
     createBubbleWindow() // 创建气泡窗口
+
+    // 初始化待办事项管理器
+    todoManager = new TodoManager()
 
     // 设置应用名称
     // app.setName('WoaChat')
@@ -113,7 +117,7 @@ if (!gotTheLock) {
       initScreenshot(mainWindow)
     }
 
-    ipcMain.on('update-unread-count', (event, data) => {
+    ipcMain.on('update-unread-count', (_event, data) => {
       console.log('Received unread count from renderer:', data)
 
       // 更新托盘图标（有未读消息时闪烁）
@@ -139,6 +143,14 @@ if (!gotTheLock) {
               // 可以在这里执行其他操作，比如获取用户信息等
               fetchAndCacheUserInfo(mainWindow)
 
+              // 注入待办事项脚本
+              if (mainWindow && todoManager) {
+                mainWindow.webContents
+                  .executeJavaScript(todoManager.getInjectScript())
+                  .then(() => console.log('Todo script injected successfully.'))
+                  .catch((err) => console.error('Failed to inject todo script:', err))
+              }
+
               // 在开发模式下打开开发者工具来查看脚本输出
               if (is.dev) {
                 mainWindow?.webContents.openDevTools({ mode: 'detach' })
@@ -151,7 +163,7 @@ if (!gotTheLock) {
           }
         })
 
-        mainWindow.webContents.on('will-redirect', (event, url) => {
+        mainWindow.webContents.on('will-redirect', (_event, url) => {
           logToGBK('The page is about to redirect.:=========', url)
         })
       }
@@ -290,7 +302,7 @@ async function createWindow(): Promise<void> {
   // await session.clearStorageData()
 
   // 设置 cookies 持久化策略
-  session.cookies.on('changed', (event, cookie, cause, removed) => {
+  session.cookies.on('changed', (_event, cookie, _cause, removed) => {
     if (!removed && (cookie.domain?.includes('wps.cn') || cookie.domain?.includes('kdocs.cn'))) {
       console.log('Login cookie saved:', cookie.name, 'for domain:', cookie.domain)
     }
@@ -300,13 +312,13 @@ async function createWindow(): Promise<void> {
   await checkLoginStatus(session)
 
   // 允许所有权限请求
-  session.setPermissionRequestHandler((webContents, permission, callback) => {
+  session.setPermissionRequestHandler((_webContents, permission, callback) => {
     console.log('Permission requested:', permission)
     callback(true) // 允许所有权限
   })
 
   // 设置证书验证处理器
-  session.setCertificateVerifyProc((request, callback) => {
+  session.setCertificateVerifyProc((_request, callback) => {
     callback(0) // 接受所有证书
   })
 
@@ -330,7 +342,7 @@ async function createWindow(): Promise<void> {
   })
 
   // 允许所有请求
-  session.webRequest.onBeforeRequest((details, callback) => {
+  session.webRequest.onBeforeRequest((_details, callback) => {
     // console.log('Request to:', details.url)
     // 允许所有请求
     callback({})
@@ -377,7 +389,7 @@ async function createWindow(): Promise<void> {
   console.log('Loading URL:', targetURL)
 
   // 添加导航监听器 - 允许所有导航
-  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+  mainWindow.webContents.on('will-navigate', (_event, navigationUrl) => {
     console.log('Will navigate to:', navigationUrl)
     // 允许所有导航，不做任何限制
   })
@@ -406,7 +418,7 @@ async function createWindow(): Promise<void> {
       // 添加网络错误监听 - 只处理真正的页面加载失败
       mainWindow?.webContents.on(
         'did-fail-load',
-        (event, errorCode, errorDescription, validatedURL) => {
+        (_event, errorCode, errorDescription, validatedURL) => {
           console.error('Page failed to load:', {
             errorCode,
             errorDescription,
@@ -609,7 +621,6 @@ function createBubbleWindow(): void {
       preload: join(__dirname, '../preload/bubblePreload.js'),
       nodeIntegration: true, // 启用 Node.js 集成
       contextIsolation: false, // 禁用上下文隔离
-      enableRemoteModule: false, // 启用远程模块
       backgroundThrottling: false, // 禁用后台节流
       session: ses,
       webSecurity: false, // 禁用安全策略
@@ -711,7 +722,7 @@ function createBubbleWindow(): void {
   bubbleWindow.setAlwaysOnTop(true, 'screen-saver')
 
   // 监听渲染进程异常  , 出错保护，防止崩溃
-  bubbleWindow.webContents.on('render-process-gone', (event, details) => {
+  bubbleWindow.webContents.on('render-process-gone', (_event, details) => {
     console.log('Bubble window render process gone:', details)
     bubbleWindow?.reload()
     const pos = store.get('bubbleWindowPosition')
@@ -729,13 +740,16 @@ function createBubbleWindow(): void {
   // })
 
   bubbleWindow.on('move', () => {
-    const [x, y] = bubbleWindow.getPosition()
-    store.set('bubbleWindowPosition', { x, y })
-    console.log('Bubble window moved:', x, y)
+    if (bubbleWindow) {
+      const [x, y] = bubbleWindow.getPosition()
+      store.set('bubbleWindowPosition', { x, y })
+      console.log('Bubble window moved:', x, y)
+    }
   })
 }
 
 // 创建悬浮窗口
+/* // Commented out as it's unused
 function createExtensionWindow(): void {
   extensionWindow = new BrowserWindow({
     width: 60,
@@ -779,6 +793,7 @@ function createExtensionWindow(): void {
     extensionWindow = null
   })
 }
+*/
 
 // 在主进程中监听 open-feedback 事件
 ipcMain.on('open-feedback', () => {
@@ -1797,8 +1812,6 @@ ipcMain.on('manual-extract-messages', () => {
     })
   }
 })
-
-
 
 // 主进程监听并转发到气泡窗口
 ipcMain.on('update-messages', async (event, data) => {

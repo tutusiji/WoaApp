@@ -49,7 +49,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
-          bubble: resolve(__dirname, 'src/renderer/bubble.html')
+          bubble: resolve(__dirname, 'src/renderer/bubble.html'),
+          todo: resolve(__dirname, 'src/renderer/todo.html')
         }
       }
     }
