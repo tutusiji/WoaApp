@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: woaapp
+productName: WoaApp
 directories:
   buildResources: build
   output: dist
@@ -13,13 +13,18 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: woaapp
+  executableName: WoaApp
   artifactName: ${name}-${version}.${ext}
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  oneClick: false # 允许用户选择安装路径
+  allowElevation: false # 允许提升为管理员
+  allowToChangeInstallationDirectory: true # 允许更改安装目录（默认就是true）
+  perMachine: true # 推荐设为true，允许装到系统目录
+  include: build/installer.nsh # 如果有自定义脚本
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
