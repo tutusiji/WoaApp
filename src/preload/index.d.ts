@@ -14,6 +14,8 @@ declare global {
       deleteTodo: (todoId: string) => Promise<boolean>
       getUnprocessedTodoCount: () => Promise<number>
       addTodoFromChat: (text: string) => void
+      getEmotionBlurState: () => Promise<boolean>
+      setEmotionBlurState: (state: boolean) => Promise<void>
     }
   }
 }

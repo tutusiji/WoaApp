@@ -19,7 +19,11 @@ const api = {
   updateTodo: (todo: TodoItem): Promise<TodoItem> => ipcRenderer.invoke('update-todo', todo),
   deleteTodo: (todoId: string): Promise<boolean> => ipcRenderer.invoke('delete-todo', todoId),
   getUnprocessedTodoCount: (): Promise<number> => ipcRenderer.invoke('get-unprocessed-todo-count'),
-  addTodoFromChat: (text: string): void => ipcRenderer.send('add-todo-from-chat', text)
+  addTodoFromChat: (text: string): void => ipcRenderer.send('add-todo-from-chat', text),
+
+  // 表情模糊状态管理
+  getEmotionBlurState: (): Promise<boolean> => ipcRenderer.invoke('get-emotion-blur-state'),
+  setEmotionBlurState: (state: boolean): Promise<void> => ipcRenderer.invoke('set-emotion-blur-state', state)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
