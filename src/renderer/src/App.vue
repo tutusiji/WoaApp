@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import Versions from './components/Versions.vue'
+import UpdateNotification from './components/UpdateNotification.vue'
+import UpdateControls from './components/UpdateControls.vue'
 
 const ipcHandle = () => window.electron.ipcRenderer.send('ping')
 </script>
@@ -23,4 +25,10 @@ const ipcHandle = () => window.electron.ipcRenderer.send('ping')
     </div>
   </div>
   <Versions />
+  
+  <!-- 自动更新测试控制面板 -->
+  <UpdateControls />
+  
+  <!-- 自动更新通知组件 -->
+  <UpdateNotification />
 </template>

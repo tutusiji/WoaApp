@@ -46,7 +46,13 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  - provider: generic
+    url: https://your-update-server.com/releases
+    publishAutoUpdate: true
+  - provider: github
+    owner: tutusiji
+    repo: WoaApp
+    private: false
+    publishAutoUpdate: true
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
