@@ -23,7 +23,13 @@ const api = {
 
   // 表情模糊状态管理
   getEmotionBlurState: (): Promise<boolean> => ipcRenderer.invoke('get-emotion-blur-state'),
-  setEmotionBlurState: (state: boolean): Promise<void> => ipcRenderer.invoke('set-emotion-blur-state', state)
+  setEmotionBlurState: (state: boolean): Promise<void> => ipcRenderer.invoke('set-emotion-blur-state', state),
+
+  // 自动更新相关API
+  checkForUpdates: (): void => ipcRenderer.send('check-for-updates'),
+  startUpdateDownload: (versionInfo: any): void => ipcRenderer.send('start-update-download', versionInfo),
+  restartAndInstallUpdate: (): void => ipcRenderer.send('restart-and-install-update'),
+  getCurrentVersion: (): Promise<string> => ipcRenderer.invoke('get-current-version')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
@@ -33,6 +39,17 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
+    
+    // 为更新通知组件暴露需要的API
+    contextBridge.exposeInMainWorld('electronAPI', {
+      send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+      on: (channel: string, listener: (...args: any[]) => void) => {
+        ipcRenderer.on(channel, (event, ...args) => listener(...args))
+      },
+      off: (channel: string, listener: (...args: any[]) => void) => {
+        ipcRenderer.off(channel, listener)
+      }
+    })
   } catch (error) {
     console.error(error)
   }
@@ -43,4 +60,14 @@ if (process.contextIsolated) {
   window.api = api
   // @ts-ignore (define in dts)
   window.ipcRenderer = ipcRenderer
+  // @ts-ignore (define in dts)
+  window.electronAPI = {
+    send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+    on: (channel: string, listener: (...args: any[]) => void) => {
+      ipcRenderer.on(channel, (event, ...args) => listener(...args))
+    },
+    off: (channel: string, listener: (...args: any[]) => void) => {
+      ipcRenderer.off(channel, listener)
+    }
+  }
 }

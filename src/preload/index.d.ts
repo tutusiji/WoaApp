@@ -16,6 +16,16 @@ declare global {
       addTodoFromChat: (text: string) => void
       getEmotionBlurState: () => Promise<boolean>
       setEmotionBlurState: (state: boolean) => Promise<void>
+      // 自动更新相关API
+      checkForUpdates: () => void
+      startUpdateDownload: (versionInfo: any) => void
+      restartAndInstallUpdate: () => void
+      getCurrentVersion: () => Promise<string>
+    }
+    electronAPI: {
+      send: (channel: string, ...args: any[]) => void
+      on: (channel: string, listener: (...args: any[]) => void) => void
+      off: (channel: string, listener: (...args: any[]) => void) => void
     }
   }
 }

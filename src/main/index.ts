@@ -23,6 +23,7 @@ import { fetchAndCacheUserInfo } from './getDepartMent'
 import { initScreenshot, cleanupScreenshot } from './screenshot'
 import { TodoManager } from './todo'
 import { getEmotionBlurInjectScript } from './emotion-blur-script'
+import { AutoUpdaterService } from './auto-updater'
 
 let mainWindow: BrowserWindow | undefined | null
 let bubbleWindow: BrowserWindow | null = null
@@ -35,6 +36,7 @@ let lastMessages: any[] = []
 let ses
 const store = new (Store as any).default() ? new (Store as any).default() : new (Store as any)()
 let todoManager: TodoManager | null = null
+let autoUpdaterService: AutoUpdaterService | null = null
 // 1. 初始化 notificationMode，若无则写入默认值
 // let notificationMode = store.get('notificationMode', 'active')
 if (!store.has('notificationMode')) {
@@ -100,6 +102,19 @@ if (!gotTheLock) {
     // 初始化待办事项管理器
     todoManager = new TodoManager()
 
+    // 初始化自动更新服务
+    const backendApiUrl = process.env.UPDATE_API_URL || 'https://api.example.com/check-update'
+    autoUpdaterService = new AutoUpdaterService(backendApiUrl)
+    autoUpdaterService.setMainWindow(mainWindow!)
+    
+    // 启动定期检查更新（每4小时检查一次）
+    autoUpdaterService.startPeriodicCheck(4 * 60 * 60 * 1000)
+    
+    // 应用启动时检查更新（延迟30秒，让应用完全启动）
+    setTimeout(() => {
+      autoUpdaterService?.checkForUpdates()
+    }, 30000)
+
     // 设置应用名称
     // app.setName('WoaChat')
 
@@ -109,6 +124,31 @@ if (!gotTheLock) {
 
     // IPC test
     ipcMain.on('ping', () => console.log('pong'))
+
+    // 自动更新相关IPC处理
+    ipcMain.on('check-for-updates', () => {
+      console.log('收到手动检查更新请求')
+      autoUpdaterService?.manualCheckForUpdates()
+    })
+
+    ipcMain.on('start-update-download', (event, versionInfo) => {
+      console.log('收到开始下载更新请求:', versionInfo)
+      if (autoUpdaterService) {
+        // 调用公开的下载方法
+        autoUpdaterService.downloadAndInstallUpdate(versionInfo)
+      }
+    })
+
+    ipcMain.on('restart-and-install-update', () => {
+      console.log('收到重启安装更新请求')
+      // 使用electron-updater的quitAndInstall方法
+      const { autoUpdater } = require('electron-updater')
+      autoUpdater.quitAndInstall()
+    })
+
+    ipcMain.handle('get-current-version', () => {
+      return autoUpdaterService?.getCurrentVersion() || packageJson.version
+    })
 
 
 
@@ -874,6 +914,13 @@ function createTray(): void {
       label: `版本${packageJson.version}`,
       click: (): void => {
         shell.openExternal('http://10.8.5.23:8081/woachat/download')
+      }
+    },
+    {
+      label: '检查更新',
+      click: (): void => {
+        console.log('手动检查更新...')
+        autoUpdaterService?.manualCheckForUpdates()
       }
     },
     {
@@ -2046,6 +2093,12 @@ app.on('window-all-closed', () => {
 
 function cleanupAndQuit(): void {
   isQuitting = true
+
+  // 清理自动更新服务
+  if (autoUpdaterService) {
+    autoUpdaterService.cleanup()
+    autoUpdaterService = null
+  }
 
   // 清理所有定时器
   if (active3sTimer) {
