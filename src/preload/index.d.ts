@@ -16,6 +16,7 @@ declare global {
       addTodoFromChat: (text: string) => void
       getEmotionBlurState: () => Promise<boolean>
       setEmotionBlurState: (state: boolean) => Promise<void>
+      showUpdateDialog: () => void
     }
   }
 }

@@ -50,7 +50,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           bubble: resolve(__dirname, 'src/renderer/bubble.html'),
-          todo: resolve(__dirname, 'src/renderer/todo.html')
+          todo: resolve(__dirname, 'src/renderer/todo.html'),
+          update: resolve(__dirname, 'src/renderer/update.html')
         }
       }
     }

@@ -23,6 +23,7 @@ import { fetchAndCacheUserInfo } from './getDepartMent'
 import { initScreenshot, cleanupScreenshot } from './screenshot'
 import { TodoManager } from './todo'
 import { getEmotionBlurInjectScript } from './emotion-blur-script'
+import AutoUpdaterManager from './auto-updater'
 
 let mainWindow: BrowserWindow | undefined | null
 let bubbleWindow: BrowserWindow | null = null
@@ -35,6 +36,7 @@ let lastMessages: any[] = []
 let ses
 const store = new (Store as any).default() ? new (Store as any).default() : new (Store as any)()
 let todoManager: TodoManager | null = null
+let autoUpdaterManager: AutoUpdaterManager | null = null
 // 1. 初始化 notificationMode，若无则写入默认值
 // let notificationMode = store.get('notificationMode', 'active')
 if (!store.has('notificationMode')) {
@@ -100,6 +102,13 @@ if (!gotTheLock) {
     // 初始化待办事项管理器
     todoManager = new TodoManager()
 
+    // 初始化自动更新管理器
+    if (mainWindow && tray) {
+      autoUpdaterManager = new AutoUpdaterManager(mainWindow, tray)
+      autoUpdaterManager.updateTrayMenu = updateTrayMenu
+      autoUpdaterManager.init()
+    }
+
     // 设置应用名称
     // app.setName('WoaChat')
 
@@ -159,7 +168,7 @@ if (!gotTheLock) {
 
               // 在开发模式下打开开发者工具来查看脚本输出
               if (is.dev) {
-                mainWindow?.webContents.openDevTools({ mode: 'detach' })
+                // mainWindow?.webContents.openDevTools({ mode: 'detach' })
               }
             }, 2000) // 等待页面加载完成
 
@@ -849,6 +858,37 @@ function createTray(): void {
       }
     },
     {
+      label: '版本更新调试工具',
+      click: (): void => {
+        console.log('Version update debug tool triggered from tray menu')
+        if (autoUpdaterManager) {
+          // 创建模拟的版本信息用于调试
+          const mockVersionInfo = {
+            _id: 'debug-version',
+            versionNumber: '1.1.2',
+            description: '这是一个调试版本，用于测试更新功能。包含以下改进：\n\n• 修复了更新弹窗显示问题\n• 优化了用户界面\n• 提升了性能',
+            projectId: 'debug-project',
+            timestamp: new Date().toISOString(),
+            status: 'published',
+            downloadUrl: 'http://localhost:3001/uploads/debug-app.exe',
+            originalFileName: 'debug-app.exe',
+            fileExt: '.exe',
+            fileSize: 50000000,
+            publishedBy: 'Debug Team',
+            updateType: 'active' as const,
+            descriptionFileUrl: 'http://localhost:3001/uploads/latest.yml',
+            descriptionFileName: 'latest.yml',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            __v: 0
+          }
+          autoUpdaterManager.showUpdateDialog(mockVersionInfo)
+        } else {
+          console.error('❌ AutoUpdaterManager not available')
+        }
+      }
+    },
+    {
       label: '手动提取消息',
       click: (): void => {
         console.log('Manual message extraction triggered from tray menu')
@@ -871,9 +911,13 @@ function createTray(): void {
 
   const contextMenuTemplate: (Electron.MenuItemConstructorOptions | Electron.MenuItem)[] = [
     {
-      label: `版本${packageJson.version}`,
+      label: getVersionMenuLabel(),
       click: (): void => {
-        shell.openExternal('http://10.8.5.23:8081/woachat/download')
+        if (autoUpdaterManager?.latestVersion) {
+          autoUpdaterManager.showUpdateDialog(autoUpdaterManager.latestVersion)
+        } else {
+          shell.openExternal('http://10.8.5.23:8081/woachat/download')
+        }
       }
     },
     {
@@ -2113,3 +2157,249 @@ function logToGBK(...args: any[]) {
   })
   console.log(...encodedArgs)
 }
+
+// 获取版本菜单标签
+function getVersionMenuLabel(): string {
+  if (autoUpdaterManager?.latestVersion) {
+    const updateType = autoUpdaterManager.latestVersion.updateType
+    const color = updateType === 'force' ? '🔴' : updateType === 'active' ? '🟡' : '⚪'
+    return `版本${packageJson.version} ${color}点击更新`
+  }
+  return `版本${packageJson.version}`
+}
+
+// 更新托盘菜单
+function updateTrayMenu(): void {
+  if (tray) {
+    // 只更新菜单，不重新创建托盘
+    const { workAreaSize } = screen.getPrimaryDisplay()
+
+    const devMenu = [
+      {
+        label: '主进程调试工具',
+        click: (): void => {
+          mainWindow?.webContents.openDevTools()
+        }
+      },
+      {
+        label: '消息调试工具',
+        click: (): void => {
+          bubbleWindow?.webContents.openDevTools({ mode: 'detach' })
+        }
+      },
+      {
+        label: '版本更新调试工具',
+        click: (): void => {
+          console.log('Version update debug tool triggered from tray menu')
+          if (autoUpdaterManager) {
+            // 创建模拟的版本信息用于调试
+            const mockVersionInfo = {
+              _id: 'debug-version',
+              versionNumber: '1.1.2',
+              description: '这是一个调试版本，用于测试更新功能。包含以下改进：\n\n• 修复了更新弹窗显示问题\n• 优化了用户界面\n• 提升了性能',
+              projectId: 'debug-project',
+              timestamp: new Date().toISOString(),
+              status: 'published',
+              downloadUrl: 'http://localhost:3001/uploads/debug-app.exe',
+              originalFileName: 'debug-app.exe',
+              fileExt: '.exe',
+              fileSize: 50000000,
+              publishedBy: 'Debug Team',
+              updateType: 'active' as const,
+              descriptionFileUrl: 'http://localhost:3001/uploads/latest.yml',
+              descriptionFileName: 'latest.yml',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              __v: 0
+            }
+            autoUpdaterManager.showUpdateDialog(mockVersionInfo)
+          } else {
+            console.error('❌ AutoUpdaterManager not available')
+          }
+        }
+      },
+      {
+        label: '手动提取消息',
+        click: (): void => {
+          console.log('Manual message extraction triggered from tray menu')
+
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.executeJavaScript(`
+              if (typeof scrollToTop === 'function' && typeof extractMessages === 'function') {
+                console.log('🔄 Manually triggering message extraction from tray...');
+                scrollToTop(extractMessages);
+              } else {
+                console.error('❌ Message extraction functions not available');
+              }
+            `).catch(err => {
+              console.error('Failed to trigger manual message extraction from tray:', err)
+            })
+          }
+        }
+      }
+    ]
+
+    const contextMenuTemplate: (Electron.MenuItemConstructorOptions | Electron.MenuItem)[] = [
+      {
+        label: getVersionMenuLabel(),
+        click: (): void => {
+          if (autoUpdaterManager?.latestVersion) {
+            autoUpdaterManager.showUpdateDialog(autoUpdaterManager.latestVersion)
+          } else {
+            shell.openExternal('http://10.8.5.23:8081/woachat/download')
+          }
+        }
+      },
+      {
+        label: '使用手册',
+        click: openUserManual
+      },
+      {
+        label: '意见反馈',
+        click: openFeedback
+      },
+      {
+        label: '重载WebView',
+        click: (): void => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            console.log('Refreshing WebView...')
+            mainWindow.webContents.reload()
+            const pos = store.get('bubbleWindowPosition')
+            if (pos) {
+              bubbleWindow?.setPosition(pos.x, pos.y)
+            }
+          }
+        }
+      },
+      {
+        label: '清除登录状态',
+        click: async (): Promise<void> => {
+          try {
+            console.log('Clearing login status...')
+
+            const session = mainWindow?.webContents.session
+            if (session) {
+              const wpsCookies = await session.cookies.get({ domain: '.wps.cn' })
+              for (const cookie of wpsCookies) {
+                await session.cookies.remove(`https://${cookie.domain}`, cookie.name)
+              }
+
+              const kdocsCookies = await session.cookies.get({ domain: '.kdocs.cn' })
+              for (const cookie of kdocsCookies) {
+                await session.cookies.remove(`https://${cookie.domain}`, cookie.name)
+              }
+
+              await session.clearStorageData({
+                storages: ['cookies', 'localstorage', 'indexdb', 'websql', 'cachestorage']
+              })
+
+              console.log('Login status cleared successfully')
+
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.reload()
+              }
+            }
+          } catch (error) {
+            console.error('Error clearing login status:', error)
+          }
+        }
+      },
+      {
+        label: '通知方式',
+        submenu: [
+          {
+            label: '常驻显示',
+            type: 'radio',
+            checked: store.get('notificationMode') === 'active',
+            click: (): void => {
+              store.set('notificationMode', 'active')
+              bubbleWindow?.webContents.send('update-notification-mode', 'active')
+              if (active3sTimer) {
+                clearTimeout(active3sTimer)
+                active3sTimer = null
+              }
+              bubbleWindow?.showInactive()
+            }
+          },
+          {
+            label: '显示4s后消失',
+            type: 'radio',
+            checked: store.get('notificationMode') === 'active-3s',
+            click: (): void => {
+              store.set('notificationMode', 'active-3s')
+              bubbleWindow?.webContents.send('update-notification-mode', 'active-3s')
+              if (active3sTimer) {
+                clearTimeout(active3sTimer)
+                active3sTimer = null
+              }
+              if (bubbleWindow && lastMessages.length > 0) {
+                bubbleWindow?.webContents.send('update-message', lastMessages)
+                bubbleShowMode()
+              }
+            }
+          },
+          {
+            label: '鼠标悬停显示',
+            type: 'radio',
+            checked: store.get('notificationMode') === 'immersive',
+            click: (): void => {
+              store.set('notificationMode', 'immersive')
+              bubbleWindow?.webContents.send('update-notification-mode', 'immersive')
+              if (active3sTimer) {
+                clearTimeout(active3sTimer)
+                active3sTimer = null
+              }
+              resetPositionBubbleWindow()
+            }
+          }
+        ]
+      },
+      {
+        label: '显示/隐藏气泡',
+        click: async (): void => {
+          if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+            if (bubbleWindow.isVisible()) {
+              bubbleWindow.hide()
+            } else {
+              showBubbleWindow()
+            }
+          }
+        }
+      },
+      {
+        label: '显示/隐藏主界面',
+        click: (): void => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isVisible()) {
+              mainWindow.hide()
+            } else {
+              mainWindow.show()
+            }
+          }
+        }
+      },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: (): void => {
+          console.log('退出菜单点击')
+          cleanupAndQuit()
+        }
+      }
+    ]
+    
+    if (is.dev) {
+      contextMenuTemplate.unshift(...devMenu)
+    }
+    
+    const contextMenu = Menu.buildFromTemplate(
+      contextMenuTemplate as Electron.MenuItemConstructorOptions[]
+    )
+    
+    // 只更新菜单，不重新创建托盘
+    tray.setContextMenu(contextMenu)
+  }
+}
+
+// 导出更新托盘菜单函数供自动更新管理器使用
+  // 这个函数会在autoUpdaterManager初始化后调用

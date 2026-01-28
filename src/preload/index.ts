@@ -1,6 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 import type { TodoItem } from '../main/todo'
+
+// Create electronAPI object manually
+const electronAPI = {
+  ipcRenderer: {
+    send: ipcRenderer.send.bind(ipcRenderer),
+    invoke: ipcRenderer.invoke.bind(ipcRenderer),
+    on: ipcRenderer.on.bind(ipcRenderer),
+    off: ipcRenderer.off.bind(ipcRenderer),
+    once: ipcRenderer.once.bind(ipcRenderer),
+    removeAllListeners: ipcRenderer.removeAllListeners.bind(ipcRenderer)
+  }
+}
 
 // Custom APIs for renderer
 const api = {
@@ -23,7 +34,12 @@ const api = {
 
   // 表情模糊状态管理
   getEmotionBlurState: (): Promise<boolean> => ipcRenderer.invoke('get-emotion-blur-state'),
-  setEmotionBlurState: (state: boolean): Promise<void> => ipcRenderer.invoke('set-emotion-blur-state', state)
+  setEmotionBlurState: (state: boolean): Promise<void> => ipcRenderer.invoke('set-emotion-blur-state', state),
+
+  // 自动更新
+  showUpdateDialog: (): void => ipcRenderer.invoke('show-update-dialog'),
+  startUpdate: (): Promise<void> => ipcRenderer.invoke('start-update'),
+  restartAndInstall: (): Promise<void> => ipcRenderer.invoke('restart-and-install')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
