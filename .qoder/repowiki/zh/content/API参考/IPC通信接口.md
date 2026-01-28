@@ -9,8 +9,17 @@
 - [src/main/screenshot.ts](file://src/main/screenshot.ts)
 - [src/main/emotion-blur-script.ts](file://src/main/emotion-blur-script.ts)
 - [src/preload/bubblePreload.ts](file://src/preload/bubblePreload.ts)
+- [src/renderer/src/update.ts](file://src/renderer/src/update.ts)
+- [src/renderer/src/components/Update.vue](file://src/renderer/src/components/Update.vue)
+- [src/renderer/update.html](file://src/renderer/update.html)
 - [temp_eSearch/lib/ipc.ts](file://temp_eSearch/lib/ipc.ts)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增自动更新模块的IPC接口规范
+- 更新预加载脚本API，新增showUpdateDialog、startUpdate、restartAndInstall方法
+- 增强IPC通信接口文档，涵盖完整的更新流程
 
 ## 目录
 1. [简介](#简介)
@@ -289,6 +298,8 @@ window.electron.ipcRenderer.on('screenshot-complete', (event, imageData) => {
 
 #### IPC接口规范
 
+**更新** 新增自动更新模块的完整IPC接口规范
+
 | 接口名称 | 调用方式 | 参数类型 | 返回值类型 | 使用场景 |
 |---------|---------|----------|-----------|----------|
 | `check-for-updates` | invoke | 无 | boolean | 检查可用更新 |
@@ -320,6 +331,8 @@ Updater-->>Main : 下载进度事件
 Main-->>Renderer : 发送下载进度
 Updater-->>Main : 下载完成事件
 Main-->>Renderer : 发送下载完成
+Renderer->>Main : ipcRenderer.invoke('restart-and-install')
+Main->>Main : 调用 quitAndInstall()
 ```
 
 **图表来源**
@@ -548,3 +561,5 @@ WoaApp项目的IPC通信接口设计体现了现代Electron应用的最佳实践
 5. **状态管理**: 通过electron-store实现数据持久化和状态同步
 
 该IPC接口规范为开发者提供了清晰的通信协议，支持待办事项管理、截图功能、自动更新、表情模糊状态管理等核心功能，为构建复杂的桌面应用程序奠定了坚实的基础。
+
+**更新** 新增的自动更新模块提供了完整的版本管理和更新机制，包括版本检查、更新下载、进度监控和自动安装等功能，增强了应用的可维护性和用户体验。

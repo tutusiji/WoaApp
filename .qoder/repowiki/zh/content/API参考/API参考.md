@@ -11,8 +11,19 @@
 - [src/main/screenshot.ts](file://src/main/screenshot.ts)
 - [src/main/emotion-blur-script.ts](file://src/main/emotion-blur-script.ts)
 - [src/preload/index.d.ts](file://src/preload/index.d.ts)
+- [src/renderer/update.ts](file://src/renderer/update.ts)
+- [src/renderer/src/components/Update.vue](file://src/renderer/src/components/Update.vue)
+- [src/renderer/update.html](file://src/renderer/update.html)
 - [temp_eSearch/lib/ipc.ts](file://temp_eSearch/lib/ipc.ts)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增完整的自动更新系统API接口说明
+- 扩展IPC通信接口文档，包含主进程和渲染进程的完整通信流程
+- 新增更新窗口的Vue组件API和事件处理机制
+- 完善WebSocket实时通信接口的详细说明
+- 增强错误处理策略和异常情况的处理方案
 
 ## 目录
 1. [简介](#简介)
@@ -28,6 +39,8 @@
 
 ## 简介
 本文件为 WoaApp 的完整 API 参考文档，覆盖主进程与渲染进程之间的 IPC 通信接口、预加载脚本暴露的 API、以及主进程提供的服务接口。同时包含 WebSocket 实时通信接口的连接处理、消息格式与事件类型说明，并提供错误处理策略与异常情况的处理方案，确保 API 文档的准确性与实用性。
+
+**更新** 本次更新重点扩展了自动更新系统的完整接口说明，包括主进程和渲染进程的IPC通信接口、更新窗口的Vue组件API以及完整的更新流程处理机制。
 
 ## 项目结构
 该项目采用 Electron 架构，主要分为：
@@ -53,7 +66,7 @@ subgraph "渲染进程"
 R1["主窗口页面"]
 R2["气泡窗口页面"]
 R3["待办窗口页面"]
-R4["更新窗口页面"]
+R4["更新窗口页面<br/>Vue组件：Update.vue"]
 end
 P1 --> M1
 P2 --> M1
@@ -66,7 +79,7 @@ M5 --> M1
 M6 --> M1
 ```
 
-图表来源
+**图表来源**
 - [src/preload/index.ts](file://src/preload/index.ts#L1-L63)
 - [src/preload/bubblePreload.ts](file://src/preload/bubblePreload.ts#L1-L70)
 - [src/main/index.ts](file://src/main/index.ts#L1-L236)
@@ -76,7 +89,7 @@ M6 --> M1
 - [src/main/screenshot.ts](file://src/main/screenshot.ts#L1-L158)
 - [src/main/emotion-blur-script.ts](file://src/main/emotion-blur-script.ts#L1-L282)
 
-章节来源
+**章节来源**
 - [src/preload/index.ts](file://src/preload/index.ts#L1-L63)
 - [src/main/index.ts](file://src/main/index.ts#L1-L236)
 
@@ -90,8 +103,10 @@ M6 --> M1
   - 窗口控制、会话配置、导航拦截、WebSocket 监听、待办事项管理、自动更新、截图、表情模糊注入
 - 气泡窗口专用 API（window.bubbleAPI）
   - 用于与主进程交互，如消息更新、通知模式更新、鼠标事件、清理消息等
+- 自动更新系统
+  - 完整的更新检查、下载、安装流程，包含主进程IPC处理器和渲染进程UI组件
 
-章节来源
+**章节来源**
 - [src/preload/index.ts](file://src/preload/index.ts#L4-L62)
 - [src/preload/bubblePreload.ts](file://src/preload/bubblePreload.ts#L1-L70)
 - [src/main/index.ts](file://src/main/index.ts#L1-L236)
@@ -113,7 +128,7 @@ Main-->>Preload : 回传结果
 Preload-->>Renderer : 返回 Promise/回调
 ```
 
-图表来源
+**图表来源**
 - [src/preload/index.ts](file://src/preload/index.ts#L4-L62)
 - [src/main/index.ts](file://src/main/index.ts#L1-L236)
 
@@ -143,6 +158,8 @@ Preload-->>Renderer : 返回 Promise/回调
   - startUpdate(): Promise<void>
   - restartAndInstall(): Promise<void>
 
+**更新** 新增自动更新相关的API接口，包括showUpdateDialog、startUpdate、restartAndInstall等方法。
+
 参数与返回值约定
 - 所有 invoke 调用均返回 Promise，表示异步处理
 - 所有 send 调用为单向通知，无返回值
@@ -152,7 +169,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - 调用主进程获取待办列表：[src/preload/index.ts](file://src/preload/index.ts#L27-L33)
 - 调用主进程更新表情模糊状态：[src/preload/index.ts](file://src/preload/index.ts#L36-L42)
 
-章节来源
+**章节来源**
 - [src/preload/index.ts](file://src/preload/index.ts#L4-L62)
 - [src/preload/index.d.ts](file://src/preload/index.d.ts#L1-L23)
 
@@ -172,7 +189,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - 监听消息更新事件：[src/preload/bubblePreload.ts](file://src/preload/bubblePreload.ts#L7-L11)
 - 发送气泡窗口就绪事件：[src/preload/bubblePreload.ts](file://src/preload/bubblePreload.ts#L21-L23)
 
-章节来源
+**章节来源**
 - [src/preload/bubblePreload.ts](file://src/preload/bubblePreload.ts#L1-L70)
 
 ### 主进程服务接口
@@ -191,7 +208,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - 主窗口创建与会话配置：[src/main/index.ts](file://src/main/index.ts#L276-L615)
 - 气泡窗口创建与资源加载：[src/main/index.ts](file://src/main/index.ts#L617-L764)
 
-章节来源
+**章节来源**
 - [src/main/index.ts](file://src/main/index.ts#L276-L764)
 
 #### 待办事项管理（IPC）
@@ -211,7 +228,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - 注册 IPC 处理器：[src/main/todo.ts](file://src/main/todo.ts#L77-L136)
 - 注入脚本与右键菜单：[src/main/todo.ts](file://src/main/todo.ts#L160-L264)
 
-章节来源
+**章节来源**
 - [src/main/todo.ts](file://src/main/todo.ts#L1-L266)
 
 #### 自动更新管理（IPC）
@@ -228,12 +245,14 @@ Preload-->>Renderer : 返回 Promise/回调
   - 下载更新包并安装
   - 注入更新图标到网页
 
+**更新** 完整的自动更新系统接口，包括版本检查、下载进度监控、安装重启等功能。
+
 使用示例路径
 - IPC 处理器注册：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L82-L131)
 - 版本比较与更新类型处理：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L254-L295)
 - 注入更新图标：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L355-L431)
 
-章节来源
+**章节来源**
 - [src/main/auto-updater.ts](file://src/main/auto-updater.ts#L1-L565)
 
 #### 截图功能（IPC）
@@ -246,7 +265,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - 初始化截图与快捷键注册：[src/main/screenshot.ts](file://src/main/screenshot.ts#L16-L78)
 - 注入截图按钮脚本：[src/main/screenshot.ts](file://src/main/screenshot.ts#L102-L140)
 
-章节来源
+**章节来源**
 - [src/main/screenshot.ts](file://src/main/screenshot.ts#L1-L158)
 
 #### 表情模糊功能（注入脚本）
@@ -258,7 +277,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - 注入脚本与按钮创建：[src/main/emotion-blur-script.ts](file://src/main/emotion-blur-script.ts#L56-L119)
 - 切换模糊状态与持久化：[src/main/emotion-blur-script.ts](file://src/main/emotion-blur-script.ts#L121-L164)
 
-章节来源
+**章节来源**
 - [src/main/emotion-blur-script.ts](file://src/main/emotion-blur-script.ts#L1-L282)
 
 ### WebSocket 实时通信接口
@@ -272,7 +291,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - WebSocket 监听与拦截：[src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L162-L210)
 - 消息解析与提取：[src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L103-L160)
 
-章节来源
+**章节来源**
 - [src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L1-L242)
 
 #### 消息格式与事件类型
@@ -287,7 +306,7 @@ Preload-->>Renderer : 返回 Promise/回调
 - Base64 解码与字节解析：[src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L104-L123)
 - 发送消息到主进程：[src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L189-L193)
 
-章节来源
+**章节来源**
 - [src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L103-L210)
 
 #### 主进程消息处理
@@ -299,8 +318,55 @@ Preload-->>Renderer : 返回 Promise/回调
 - 接收并处理消息：[src/main/index.ts](file://src/main/index.ts#L1832-L1841)
 - 推送消息到气泡窗口：[src/main/index.ts](file://src/main/index.ts#L1820-L1822)
 
-章节来源
+**章节来源**
 - [src/main/index.ts](file://src/main/index.ts#L1831-L1841)
+
+### 自动更新系统详细分析
+
+#### 主进程自动更新管理器
+- AutoUpdaterManager 类
+  - 管理自动更新的完整生命周期
+  - 处理版本检查、下载、安装等流程
+  - 管理更新窗口的创建与销毁
+- IPC 处理器注册
+  - check-for-updates：检查是否有新版本
+  - get-current-version：获取当前应用版本
+  - get-latest-version-info：获取最新版本信息
+  - start-update：开始下载更新
+  - show-update-dialog：显示更新对话框
+  - restart-and-install：重启并安装更新
+
+**更新** 新增完整的自动更新系统分析，包括主进程管理器的详细实现。
+
+使用示例路径
+- IPC 处理器注册：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L82-L131)
+- 版本比较与更新类型处理：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L254-L295)
+- 注入更新图标：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L355-L431)
+
+**章节来源**
+- [src/main/auto-updater.ts](file://src/main/auto-updater.ts#L1-L565)
+
+#### 渲染进程更新窗口组件
+- Update.vue 组件
+  - Vue 3 Composition API 实现
+  - 响应式数据管理：版本信息、下载进度、更新状态
+  - 用户界面：版本对比、更新内容展示、下载进度条
+- IPC 事件监听
+  - version-info：接收版本信息
+  - download-progress：接收下载进度
+  - download-started：下载开始事件
+  - download-error：下载错误事件
+  - update-downloaded：下载完成事件
+
+**更新** 新增渲染进程更新窗口组件的详细分析，包括Vue组件的实现和IPC通信机制。
+
+使用示例路径
+- 更新组件入口：[src/renderer/src/update.ts](file://src/renderer/src/update.ts#L1-L8)
+- 更新组件实现：[src/renderer/src/components/Update.vue](file://src/renderer/src/components/Update.vue#L1-L616)
+
+**章节来源**
+- [src/renderer/update.ts](file://src/renderer/update.ts#L1-L8)
+- [src/renderer/src/components/Update.vue](file://src/renderer/src/components/Update.vue#L1-L616)
 
 ## 依赖关系分析
 
@@ -314,9 +380,12 @@ F["src/main/screenshot.ts"] --> B
 G["src/main/emotion-blur-script.ts"] --> B
 H["src/main/websocket-monitor.ts"] --> B
 I["temp_eSearch/lib/ipc.ts"] -. 参考 .-> B
+J["src/renderer/src/components/Update.vue"] --> E
+K["src/renderer/update.ts"] --> J
+L["src/renderer/update.html"] --> K
 ```
 
-图表来源
+**图表来源**
 - [src/preload/index.ts](file://src/preload/index.ts#L1-L63)
 - [src/preload/bubblePreload.ts](file://src/preload/bubblePreload.ts#L1-L70)
 - [src/main/index.ts](file://src/main/index.ts#L1-L236)
@@ -326,8 +395,11 @@ I["temp_eSearch/lib/ipc.ts"] -. 参考 .-> B
 - [src/main/emotion-blur-script.ts](file://src/main/emotion-blur-script.ts#L1-L282)
 - [src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L1-L242)
 - [temp_eSearch/lib/ipc.ts](file://temp_eSearch/lib/ipc.ts#L1-L273)
+- [src/renderer/src/components/Update.vue](file://src/renderer/src/components/Update.vue#L1-L616)
+- [src/renderer/update.ts](file://src/renderer/update.ts#L1-L8)
+- [src/renderer/update.html](file://src/renderer/update.html#L1-L12)
 
-章节来源
+**章节来源**
 - [src/main/index.ts](file://src/main/index.ts#L1-L236)
 
 ## 性能考量
@@ -340,8 +412,13 @@ I["temp_eSearch/lib/ipc.ts"] -. 参考 .-> B
 - 截图与更新窗口
   - 截图功能使用全局快捷键与异步回调，避免阻塞 UI
   - 更新窗口采用一次性注入与事件驱动，降低资源消耗
+- 自动更新优化
+  - 开发模式下的进度模拟，避免真实网络请求影响开发效率
+  - 定时检查更新，避免频繁网络请求
 
-章节来源
+**更新** 新增自动更新系统的性能考量，包括开发模式下的进度模拟和定时检查机制。
+
+**章节来源**
 - [src/main/index.ts](file://src/main/index.ts#L286-L301)
 - [src/main/index.ts](file://src/main/index.ts#L304-L364)
 - [src/main/screenshot.ts](file://src/main/screenshot.ts#L16-L78)
@@ -360,11 +437,14 @@ I["temp_eSearch/lib/ipc.ts"] -. 参考 .-> B
 - 自动更新下载失败
   - 检查 API 地址与协议选择：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L224-L252)
   - 开发模式下的进度模拟与错误上报：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L475-L515)
+  - 检查更新窗口是否正确创建和销毁：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L311-L353)
 - 错误处理策略
   - 主进程异常捕获与日志输出：[src/main/index.ts](file://src/main/index.ts#L183-L273)
   - 自动更新错误事件监听：[src/main/auto-updater.ts](file://src/main/auto-updater.ts#L167-L170)
 
-章节来源
+**更新** 新增自动更新系统的故障排查指南，包括更新窗口创建、下载进度监控等问题的解决方案。
+
+**章节来源**
 - [src/main/index.ts](file://src/main/index.ts#L183-L273)
 - [src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L103-L160)
 - [src/main/screenshot.ts](file://src/main/screenshot.ts#L19-L42)
@@ -372,6 +452,8 @@ I["temp_eSearch/lib/ipc.ts"] -. 参考 .-> B
 
 ## 结论
 本 API 参考文档系统梳理了 WoaApp 的 IPC 通信、预加载脚本暴露的 API、主进程服务接口以及 WebSocket 实时通信接口。通过明确的参数说明、返回值类型、使用示例与故障排查指南，帮助开发者快速集成与扩展功能。建议在后续迭代中进一步完善类型定义与错误码规范，增强 API 的可维护性与一致性。
+
+**更新** 本次更新重点扩展了自动更新系统的完整接口说明，包括主进程和渲染进程的IPC通信接口，为开发者提供了完整的更新功能集成指南。
 
 ## 附录
 
@@ -393,11 +475,21 @@ I["temp_eSearch/lib/ipc.ts"] -. 参考 .-> B
 - 系统事件
   - ping/pong
   - open-feedback
+- 自动更新
+  - check-for-updates
+  - get-current-version
+  - get-latest-version-info
+  - start-update
+  - show-update-dialog
+  - restart-and-install
 
-章节来源
+**更新** 新增自动更新相关的IPC事件清单，涵盖完整的更新流程。
+
+**章节来源**
 - [src/main/index.ts](file://src/main/index.ts#L120-L139)
 - [src/main/todo.ts](file://src/main/todo.ts#L77-L136)
 - [src/main/index.ts](file://src/main/index.ts#L1831-L1841)
+- [src/main/auto-updater.ts](file://src/main/auto-updater.ts#L82-L131)
 
 ### WebSocket 消息解析流程
 
@@ -413,6 +505,36 @@ LogText --> End(["结束"])
 SendToMain --> End
 ```
 
-图表来源
+**图表来源**
 - [src/main/websocket-monitor.ts](file://src/main/websocket-monitor.ts#L103-L210)
 - [src/main/index.ts](file://src/main/index.ts#L1831-L1841)
+
+### 自动更新系统工作流程
+
+```mermaid
+flowchart TD
+Start(["应用启动"]) --> Init["初始化自动更新管理器"]
+Init --> Timer["设置定时检查"]
+Timer --> Check["检查更新"]
+Check --> HasUpdate{"有新版本？"}
+HasUpdate --> |否| Wait["等待下次检查"]
+HasUpdate --> |是| Type{"更新类型？"}
+Type --> Force["强制更新"]
+Type --> Active["主动提醒"]
+Type --> Passive["被动提醒"]
+Force --> Dialog["显示更新对话框"]
+Active --> Dialog
+Active --> Icon["注入更新图标"]
+Active --> Tray["更新托盘菜单"]
+Passive --> Tray
+Dialog --> Download["开始下载"]
+Download --> Progress["下载进度监控"]
+Progress --> Complete["下载完成"]
+Complete --> Install["重启并安装"]
+Wait --> Check
+```
+
+**图表来源**
+- [src/main/auto-updater.ts](file://src/main/auto-updater.ts#L59-L80)
+- [src/main/auto-updater.ts](file://src/main/auto-updater.ts#L272-L295)
+- [src/main/auto-updater.ts](file://src/main/auto-updater.ts#L435-L473)

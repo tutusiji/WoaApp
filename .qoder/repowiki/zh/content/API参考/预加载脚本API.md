@@ -13,7 +13,15 @@
 - [src\renderer\src\components\Bubble.vue](file://src\renderer\src\components\Bubble.vue)
 - [src\renderer\src\components\Todo.vue](file://src\renderer\src\components\Todo.vue)
 - [src\renderer\src\components\Update.vue](file://src\renderer\src\components\Update.vue)
+- [src\renderer\update.html](file://src\renderer\update.html)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 完善了自动更新相关的API文档，补充了`restartAndInstall`方法的完整实现
+- 修正了TypeScript类型定义，确保所有API方法都有正确的类型声明
+- 增强了自动更新流程的详细说明，包括IPC通信和状态管理
+- 完善了更新窗口的生命周期管理和事件处理机制
 
 ## 目录
 1. [简介](#简介)
@@ -35,6 +43,8 @@
 - `window.api`: 包含应用特定的业务API
 
 这些API涵盖了开发者工具控制、截图操作、待办事项管理、表情模糊状态管理和自动更新等功能。
+
+**更新** 完善了自动更新相关的API方法，确保TypeScript类型检查的完整性。
 
 ## 项目结构
 
@@ -58,21 +68,23 @@ subgraph "渲染进程层"
 R1[src\renderer\src\components\Bubble.vue]
 R2[src\renderer\src\components\Todo.vue]
 R3[src\renderer\src\components\Update.vue]
+R4[src\renderer\update.html]
 end
 P1 --> M1
 P2 --> M1
 P1 --> R1
 P1 --> R2
 P1 --> R3
+R3 --> R4
 ```
 
 **图表来源**
 - [src\preload\index.ts](file://src\preload\index.ts#L1-L63)
-- [src\main\index.ts](file://src\main\index.ts#L1-L800)
+- [src\main\index.ts](file://src\main\index.ts#L1-L2406)
 
 **章节来源**
 - [src\preload\index.ts](file://src\preload\index.ts#L1-L63)
-- [src\main\index.ts](file://src\main\index.ts#L1-L800)
+- [src\main\index.ts](file://src\main\index.ts#L1-L2406)
 
 ## 核心组件
 
@@ -110,9 +122,11 @@ ElectronAPI是对标准Electron IPC接口的封装，提供了类型安全的API
 | startUpdate | - | Promise<void> | 开始更新流程 |
 | restartAndInstall | - | Promise<void> | 重启并安装更新 |
 
+**更新** 新增了`restartAndInstall`方法的完整实现，用于重启应用程序并安装新版本。
+
 **章节来源**
-- [src\preload\index.ts](file://src\preload\index.ts#L4-L43)
-- [src\preload\index.d.ts](file://src\preload\index.d.ts#L6-L21)
+- [src\preload\index.ts](file://src\preload\index.ts#L17-L43)
+- [src\preload\index.d.ts](file://src\preload\index.d.ts#L6-L22)
 
 ## 架构概览
 
@@ -245,9 +259,27 @@ stateDiagram-v2
 | active | 主动提醒 | 显示更新提示并提供安装选项 |
 | passive | 被动提醒 | 仅在托盘菜单中提示更新 |
 
+#### 自动更新API方法
+
+**显示更新对话框**
+- 方法: `showUpdateDialog()`
+- 返回: `void`
+- 用途: 显示更新对话框供用户确认
+
+**开始更新**
+- 方法: `startUpdate()`
+- 返回: `Promise<void>`
+- 用途: 开始下载并安装更新
+
+**重启并安装**
+- 方法: `restartAndInstall()`
+- 返回: `Promise<void>`
+- 用途: 重启应用程序并安装新版本
+
 **章节来源**
 - [src\main\auto-updater.ts](file://src\main\auto-updater.ts#L10-L32)
 - [src\main\auto-updater.ts](file://src\main\auto-updater.ts#L272-L295)
+- [src\preload\index.ts](file://src\preload\index.ts#L39-L43)
 
 ### 表情模糊状态管理
 
@@ -348,32 +380,34 @@ subgraph "渲染进程"
 A[Bubble.vue]
 B[Todo.vue]
 C[Update.vue]
+D[update.html]
 end
 subgraph "预加载脚本"
-D[index.ts - electronAPI]
-E[index.ts - 自定义API]
-F[bubblePreload.ts]
+E[index.ts - electronAPI]
+F[index.ts - 自定义API]
+G[bubblePreload.ts]
 end
 subgraph "主进程"
-G[index.ts - 主入口]
-H[todo.ts - 待办管理]
-I[auto-updater.ts - 更新管理]
-J[screenshot.ts - 截图功能]
-K[emotion-blur-script.ts - 模糊功能]
+H[index.ts - 主入口]
+I[todo.ts - 待办管理]
+J[auto-updater.ts - 更新管理]
+K[screenshot.ts - 截图功能]
+L[emotion-blur-script.ts - 模糊功能]
 end
-A --> D
 A --> E
-B --> D
+A --> F
 B --> E
-C --> D
+B --> F
 C --> E
-D --> G
-E --> G
-F --> G
+C --> F
+D --> F
+E --> H
+F --> H
 G --> H
-G --> I
-G --> J
-G --> K
+H --> I
+H --> J
+H --> K
+H --> L
 ```
 
 **图表来源**
@@ -382,7 +416,7 @@ G --> K
 - [src\renderer\src\components\Update.vue](file://src\renderer\src\components\Update.vue#L288-L337)
 
 **章节来源**
-- [src\main\index.ts](file://src\main\index.ts#L1-L800)
+- [src\main\index.ts](file://src\main\index.ts#L1-L2406)
 
 ## 性能考虑
 
@@ -416,6 +450,11 @@ G --> K
 - 原因: 类型定义不匹配或缺少必要的类型声明
 - 解决方案: 检查`index.d.ts`文件中的类型定义
 
+**问题4: 自动更新API缺失**
+- 症状: `restartAndInstall`方法在TypeScript中无法识别
+- 原因: 类型定义文件缺少对应的方法声明
+- 解决方案: 在`index.d.ts`中添加`restartAndInstall`方法的类型定义
+
 **章节来源**
 - [src\preload\index.d.ts](file://src\preload\index.d.ts#L4-L22)
 - [src\main\index.ts](file://src\main\index.ts#L92-L120)
@@ -429,4 +468,4 @@ WoaApp的预加载脚本API设计体现了现代Electron应用的最佳实践：
 3. **功能完整**: 覆盖了开发者工具、截图、待办管理、表情模糊和自动更新等核心功能
 4. **易于扩展**: 清晰的架构设计便于添加新的API功能
 
-该API设计为渲染进程提供了安全、可靠且功能丰富的系统接口，同时保持了良好的性能和可维护性。
+**更新** 本次更新完善了自动更新相关的API文档，确保了TypeScript类型检查的完整性，并增强了自动更新流程的技术细节说明。该API设计为渲染进程提供了安全、可靠且功能丰富的系统接口，同时保持了良好的性能和可维护性。
